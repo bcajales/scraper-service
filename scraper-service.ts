@@ -1,8 +1,8 @@
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import puppeteer from "https://deno.land/x/puppeteer@16.2.0/mod.ts";
+import { serve } from "https://deno.land/std@0.224.0/http/server.ts"; // <-- ACTUALIZADO
+import puppeteer from "https://deno.land/x/puppeteer@22.10.0/mod.ts";   // <-- ACTUALIZADO
 import * as cheerio from "https://esm.sh/cheerio@1.0.0-rc.12";
 
-// ... (todo el código de la función scrapeAllAttachmentsWithBrowser) ...
+// La función de scraping (scrapeAllAttachmentsWithBrowser) no cambia.
 async function scrapeAllAttachmentsWithBrowser(initialUrl: string): Promise<any[]> {
     let browser;
     try {
@@ -14,7 +14,7 @@ async function scrapeAllAttachmentsWithBrowser(initialUrl: string): Promise<any[
         await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36');
         console.log(`[PUPPETEER] Navegando a: ${initialUrl}`);
         await page.goto(initialUrl, { waitUntil: 'networkidle2' });
-
+        
         const allAttachments: { nombre: string; url_descarga: string }[] = [];
         const processedUrls = new Set<string>();
 
@@ -44,7 +44,7 @@ async function scrapeAllAttachmentsWithBrowser(initialUrl: string): Promise<any[
             const dedicatedPageUrl = new URL(dedicatedPageLink, initialUrl).href;
             console.log(`[PUPPETEER] Navegando a la página de adjuntos dedicada: ${dedicatedPageUrl}`);
             await page.goto(dedicatedPageUrl, { waitUntil: 'networkidle2' });
-
+            
             const dedicatedHtml = await page.content();
             const $d = cheerio.load(dedicatedHtml);
 
@@ -72,6 +72,7 @@ async function scrapeAllAttachmentsWithBrowser(initialUrl: string): Promise<any[
     }
 }
 
+// El manejador y el inicio del servidor no cambian.
 async function handler(req: Request): Promise<Response> {
     if (req.method !== 'POST') {
         return new Response("Método no permitido", { status: 405 });
@@ -89,5 +90,7 @@ async function handler(req: Request): Promise<Response> {
 }
 
 const port = Deno.env.get("PORT") ? Number(Deno.env.get("PORT")) : 8000;
-console.log(`Servidor de scraping listo para recibir peticiones puerto ${port}.`);
+
+console.log(`Servidor de scraping listo para recibir peticiones en el puerto ${port}.`);
+
 serve(handler, { port, hostname: "0.0.0.0" });
