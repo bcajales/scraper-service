@@ -1,18 +1,19 @@
 // Archivo: scraper-service.ts
-import { serve, puppeteer, cheerio } from "./deps.ts";
+import { serve, chromium, cheerio } from "./deps.ts";
 
 async function scrapeAllAttachmentsWithBrowser(initialUrl: string): Promise<any[]> {
     let browser;
     try {
-        browser = await puppeteer.launch({
-            headless: true,
-            args: ['--no-sandbox', '--disable-setuid-sandbox'],
+        // 1. Iniciar Playwright
+        browser = await chromium.launch();
+        const context = await browser.newContext({
+            userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
         });
-        const page = await browser.newPage();
-        await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36');
-        console.log(`[PUPPETEER] Navegando a: ${initialUrl}`);
-        await page.goto(initialUrl, { waitUntil: 'networkidle2' });
-
+        const page = await context.newPage();
+        
+        console.log(`[PLAYWRIGHT] Navegando a: ${initialUrl}`);
+        await page.goto(initialUrl, { waitUntil: 'networkidle' }); // 'networkidle' es el equivalente en Playwright
+        
         const allAttachments: { nombre: string; url_descarga: string }[] = [];
         const processedUrls = new Set<string>();
         const html = await page.content();
@@ -36,12 +37,12 @@ async function scrapeAllAttachmentsWithBrowser(initialUrl: string): Promise<any[
             }
         });
 
-        const dedicatedPageLink = $("a[href*='ViewAttachment.aspx']").attr('href');
+        const dedicatedPageLink = await page.$eval("a[href*='ViewAttachment.aspx']", (el) => (el as HTMLAnchorElement).href).catch(() => null);
+        
         if (dedicatedPageLink) {
-            const dedicatedPageUrl = new URL(dedicatedPageLink, initialUrl).href;
-            console.log(`[PUPPETEER] Navegando a la página de adjuntos dedicada: ${dedicatedPageUrl}`);
-            await page.goto(dedicatedPageUrl, { waitUntil: 'networkidle2' });
-
+            console.log(`[PLAYWRIGHT] Navegando a la página de adjuntos dedicada: ${dedicatedPageLink}`);
+            await page.goto(dedicatedPageLink, { waitUntil: 'networkidle' });
+            
             const dedicatedHtml = await page.content();
             const $d = cheerio.load(dedicatedHtml);
 
@@ -49,18 +50,21 @@ async function scrapeAllAttachmentsWithBrowser(initialUrl: string): Promise<any[
                 const nombreAnexo = $d(row).find('td').eq(0).text().trim();
                 const linkElement = $d(row).find('td').eq(2).find('a');
                 if (nombreAnexo && linkElement.length > 0) {
-                    const linkDescarga = new URL(linkElement.attr('href'), initialUrl).href;
-                    if (!processedUrls.has(linkDescarga)) {
-                        allAttachments.push({ nombre: nombreAnexo, url_descarga: linkDescarga });
-                        processedUrls.add(linkDescarga);
+                    const href = linkElement.attr('href');
+                    if(href){
+                        const linkDescarga = new URL(href, initialUrl).href;
+                        if (!processedUrls.has(linkDescarga)) {
+                            allAttachments.push({ nombre: nombreAnexo, url_descarga: linkDescarga });
+                            processedUrls.add(linkDescarga);
+                        }
                     }
                 }
             });
         }
-        console.log(`[PUPPETEER] Se encontraron ${allAttachments.length} anexos en total.`);
+        console.log(`[PLAYWRIGHT] Se encontraron ${allAttachments.length} anexos en total.`);
         return allAttachments;
     } catch (error) {
-        console.error(`[PUPPETEER_ERROR] Fallo durante el scraping de ${initialUrl}:`, error);
+        console.error(`[PLAYWRIGHT_ERROR] Fallo durante el scraping de ${initialUrl}:`, error);
         return [];
     } finally {
         if (browser) {
@@ -87,5 +91,4 @@ async function handler(req: Request): Promise<Response> {
 
 const port = Deno.env.get("PORT") ? Number(Deno.env.get("PORT")) : 8000;
 console.log(`Servidor de scraping listo para recibir peticiones en el puerto ${port}.`);
-serve(handler, { port, hostname: "0.0.0.0" });
 serve(handler, { port, hostname: "0.0.0.0" });
