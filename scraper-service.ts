@@ -89,5 +89,5 @@ async function handler(req: Request): Promise<Response> {
 }
 
 const port = Deno.env.get("PORT") ? Number(Deno.env.get("PORT")) : 8000;
-console.log(`Servidor de scraping listo para recibir peticiones en el puerto ${port}.`);
+console.log(`Servidor de scraping listo para recibir peticiones puerto ${port}.`);
 serve(handler, { port, hostname: "0.0.0.0" });
