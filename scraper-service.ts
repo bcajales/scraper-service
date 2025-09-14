@@ -1,19 +1,28 @@
-// Archivo: scraper-service.ts
 import { serve, chromium, cheerio } from "./deps.ts";
 
 async function scrapeAllAttachmentsWithBrowser(initialUrl: string): Promise<any[]> {
     let browser;
     try {
-        // 1. Iniciar Playwright
-        browser = await chromium.launch();
+        // Obtiene la API Key de las variables de entorno
+        const apiKey = Deno.env.get("BROWSERLESS_API_KEY");
+        if (!apiKey) {
+            throw new Error("La variable de entorno BROWSERLESS_API_KEY no está definida.");
+        }
+
+        // --- CAMBIO CLAVE: Nos conectamos a un navegador remoto ---
+        const browserWSEndpoint = `wss://chrome.browserless.io?token=${apiKey}`;
+        console.log("[BROWSERLESS] Conectando al navegador remoto...");
+        browser = await chromium.connect(browserWSEndpoint);
+
         const context = await browser.newContext({
             userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
         });
         const page = await context.newPage();
-        
-        console.log(`[PLAYWRIGHT] Navegando a: ${initialUrl}`);
-        await page.goto(initialUrl, { waitUntil: 'networkidle' }); // 'networkidle' es el equivalente en Playwright
-        
+
+        console.log(`[BROWSERLESS] Navegando a: ${initialUrl}`);
+        await page.goto(initialUrl, { waitUntil: 'networkidle' });
+
+        // ... El resto del código de scraping es idéntico ...
         const allAttachments: { nombre: string; url_descarga: string }[] = [];
         const processedUrls = new Set<string>();
         const html = await page.content();
@@ -38,11 +47,11 @@ async function scrapeAllAttachmentsWithBrowser(initialUrl: string): Promise<any[
         });
 
         const dedicatedPageLink = await page.$eval("a[href*='ViewAttachment.aspx']", (el) => (el as HTMLAnchorElement).href).catch(() => null);
-        
+
         if (dedicatedPageLink) {
-            console.log(`[PLAYWRIGHT] Navegando a la página de adjuntos dedicada: ${dedicatedPageLink}`);
+            console.log(`[BROWSERLESS] Navegando a la página de adjuntos dedicada: ${dedicatedPageLink}`);
             await page.goto(dedicatedPageLink, { waitUntil: 'networkidle' });
-            
+
             const dedicatedHtml = await page.content();
             const $d = cheerio.load(dedicatedHtml);
 
@@ -61,10 +70,11 @@ async function scrapeAllAttachmentsWithBrowser(initialUrl: string): Promise<any[
                 }
             });
         }
-        console.log(`[PLAYWRIGHT] Se encontraron ${allAttachments.length} anexos en total.`);
+        console.log(`[BROWSERLESS] Se encontraron ${allAttachments.length} anexos en total.`);
         return allAttachments;
+
     } catch (error) {
-        console.error(`[PLAYWRIGHT_ERROR] Fallo durante el scraping de ${initialUrl}:`, error);
+        console.error(`[BROWSERLESS_ERROR] Fallo durante el scraping:`, error);
         return [];
     } finally {
         if (browser) {
@@ -73,6 +83,7 @@ async function scrapeAllAttachmentsWithBrowser(initialUrl: string): Promise<any[
     }
 }
 
+// El resto del servidor no cambia
 async function handler(req: Request): Promise<Response> {
     if (req.method !== 'POST') {
         return new Response("Método no permitido", { status: 405 });
